@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# ---------------------------------------------------------------------------
+#  Demo
+# ---------------------------------------------------------------------------
+
+source "$_TUI_SOURCEPATH"
+
+# Draw the demo screen centered in the terminal.
+_demo_draw() {
+  local title=' tui.bash demo ' count=$1 last=$2
+  local hint=' space/up: +1   down: -1   q/esc: quit '
+
+  printf '\e[2J'
+  printf '\e[%d;%dH\e[1;7m%s\e[0m' \
+    $(( _TUI_ROWS / 2 - 1 )) $(( (_TUI_COLS - ${#title}) / 2 + 1 )) "$title"
+  printf '\e[%d;%dHCount: %d' \
+    $(( _TUI_ROWS / 2 + 1 )) $(( _TUI_COLS / 2 - 4 )) "$count"
+  printf '\e[%d;%dHLast key: %s\e[K' \
+    $(( _TUI_ROWS / 2 + 2 )) $(( _TUI_COLS / 2 - 4 )) "${last:--}"
+  printf '\e[%d;%dH\e[2m%s\e[0m' \
+    "$_TUI_ROWS" $(( (_TUI_COLS - ${#hint}) / 2 + 1 )) "$hint"
+}
+
+
+count=0
+last=''
+redraw=1
+
+trap _tui_deinit EXIT   # restore the terminal even on Ctrl-C
+_tui_init               # also reads the initial terminal size
+_tui_set_name "demo"
+_tui_trap_resize
+_tui_trap_suspend
+_tui_title_set ' tui.bash demo'
+
+while :; do
+  (( redraw )) && { _demo_draw "$count" "$last"; redraw=0; }
+
+  # Wakes up every _TUI_TICK seconds so a pending resize is noticed.
+  # A timeout or a WINCH gives an empty _TUI_KEY (a "tick"); EOF returns 1.
+  _tui_parse_key "$_TUI_TICK" || break
+
+  _tui_suspend_check
+
+  _tui_resize_check && redraw=1
+
+  [[ -z $_TUI_KEY ]] && continue
+  last=$_TUI_KEY
+  redraw=1
+  case $_TUI_KEY in
+    q|Q|esc)  break ;;
+    space|up) count=$(( count + 1 )) ;;
+    down)     count=$(( count - 1 )) ;;
+  esac
+done
+
+_tui_untrap_suspend
+_tui_untrap_resize
+trap - EXIT
+_tui_deinit
+
